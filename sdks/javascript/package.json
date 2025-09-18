@@ -1,0 +1,72 @@
+{
+  "name": "@deai/sdk",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript SDK for DeAI distributed AI computation network",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "build:watch": "rollup -c -w",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "type-check": "tsc --noEmit",
+    "docs": "typedoc src/index.ts",
+    "prepublishOnly": "npm run build && npm run test"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "ws": "^8.14.0",
+    "near-api-js": "^4.0.0",
+    "eventemitter3": "^5.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0",
+    "@types/ws": "^8.5.0",
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.2.0",
+    "rollup": "^4.0.0",
+    "@rollup/plugin-typescript": "^11.1.0",
+    "@rollup/plugin-node-resolve": "^15.2.0",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "rollup-plugin-dts": "^6.1.0",
+    "typedoc": "^0.25.0"
+  },
+  "peerDependencies": {
+    "near-api-js": "^4.0.0"
+  },
+  "keywords": [
+    "deai",
+    "artificial-intelligence",
+    "machine-learning",
+    "blockchain",
+    "near-protocol",
+    "decentralized",
+    "sdk",
+    "typescript",
+    "javascript"
+  ],
+  "author": "DeAI Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deai-org/sdk-js"
+  },
+  "bugs": {
+    "url": "https://github.com/deai-org/sdk-js/issues"
+  },
+  "homepage": "https://docs.deai.org/sdk/javascript"
+}

@@ -1,0 +1,304 @@
+# Default values for deai-platform
+# This is a YAML-formatted file.
+
+global:
+  environment: production
+  imageTag: latest
+  registry: gcr.io/deai-platform
+  imagePullPolicy: Always
+
+# Smart Contract Configuration
+contract:
+  address: deai-compute.near
+  network: mainnet
+  rpcUrl: https://rpc.mainnet.near.org
+
+# API Gateway Configuration
+apiGateway:
+  enabled: true
+  name: api-gateway
+  replicas: 3
+  image:
+    repository: deai-api-gateway
+    tag: ""  # Uses global.imageTag if empty
+  
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  
+  env:
+    DATABASE_URL: "postgresql://postgres:password@postgresql:5432/deai"
+    REDIS_URL: "redis://redis:6379"
+    NEAR_CONTRACT_ID: ""  # Will be set from contract.address
+    NEAR_RPC_URL: ""      # Will be set from contract.rpcUrl
+    LOG_LEVEL: "info"
+    RUST_LOG: "info"
+  
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+# Web Dashboard Configuration
+webDashboard:
+  enabled: true
+  name: web-dashboard
+  replicas: 2
+  image:
+    repository: deai-web-dashboard
+    tag: ""  # Uses global.imageTag if empty
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  env:
+    REACT_APP_API_URL: ""  # Will be set from ingress
+    REACT_APP_CONTRACT_ID: ""  # Will be set from contract.address
+    REACT_APP_NETWORK: ""     # Will be set from contract.network
+
+# Node Client Configuration (for reference nodes)
+nodeClient:
+  enabled: false  # Usually deployed separately by node operators
+  name: node-client
+  replicas: 1
+  image:
+    repository: deai-node-client
+    tag: ""
+  
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+      nvidia.com/gpu: 1
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+      nvidia.com/gpu: 1
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  name: monitoring
+  
+  prometheus:
+    enabled: true
+    retention: "30d"
+    storage:
+      size: "50Gi"
+  
+  grafana:
+    enabled: true
+    adminPassword: "admin"  # Change in production
+    persistence:
+      enabled: true
+      size: "10Gi"
+  
+  alertmanager:
+    enabled: true
+    config:
+      slack:
+        webhook_url: ""  # Set in production
+
+# Database Configuration
+postgresql:
+  enabled: true
+  auth:
+    database: "deai"
+    username: "postgres"
+    password: "password"  # Change in production
+  primary:
+    persistence:
+      enabled: true
+      size: "100Gi"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+
+# Redis Configuration
+redis:
+  enabled: true
+  auth:
+    enabled: false  # Enable in production
+  master:
+    persistence:
+      enabled: true
+      size: "10Gi"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  
+  hosts:
+    - host: api.deai.network
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api-gateway
+    - host: app.deai.network
+      paths:
+        - path: /
+          pathType: Prefix
+          service: web-dashboard
+  
+  tls:
+    enabled: true
+    secretName: deai-platform-tls
+
+# Autoscaling Configuration
+autoscaling:
+  enabled: true
+  apiGateway:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  webDashboard:
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Security Context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# RBAC
+rbac:
+  create: true
+
+# Node Affinity
+nodeAffinity:
+  enabled: false
+  key: "node-type"
+  value: "compute"
+
+# Tolerations
+tolerations: []
+
+# Pod Anti-Affinity
+podAntiAffinity:
+  enabled: true
+  type: "soft"  # or "hard"
+
+# Backup Configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: "30d"
+  storage:
+    size: "200Gi"
+    className: "fast-ssd"
+
+# Configuration for different environments
+environments:
+  development:
+    apiGateway:
+      replicas: 1
+    webDashboard:
+      replicas: 1
+    postgresql:
+      primary:
+        persistence:
+          size: "20Gi"
+    redis:
+      master:
+        persistence:
+          size: "5Gi"
+  
+  staging:
+    apiGateway:
+      replicas: 2
+    webDashboard:
+      replicas: 1
+    postgresql:
+      primary:
+        persistence:
+          size: "50Gi"
+    redis:
+      master:
+        persistence:
+          size: "8Gi"
+  
+  production:
+    apiGateway:
+      replicas: 3
+    webDashboard:
+      replicas: 2
+    postgresql:
+      primary:
+        persistence:
+          size: "100Gi"
+    redis:
+      master:
+        persistence:
+          size: "10Gi"
