@@ -1,0 +1,355 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: deai-platform-alerts
+  namespace: monitoring
+  labels:
+    app: deai-platform
+    release: prometheus
+spec:
+  groups:
+  # System Health Alerts
+  - name: deai.system.health
+    interval: 30s
+    rules:
+    - alert: DeAIAPIGatewayDown
+      expr: up{job="deai-api-gateway"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: api-gateway
+      annotations:
+        summary: "DeAI API Gateway is down"
+        description: "DeAI API Gateway has been down for more than 1 minute"
+        runbook_url: "https://docs.deai.network/runbooks/api-gateway-down"
+    
+    - alert: DeAIWebDashboardDown
+      expr: up{job="deai-web-dashboard"} == 0
+      for: 2m
+      labels:
+        severity: warning
+        component: web-dashboard
+      annotations:
+        summary: "DeAI Web Dashboard is down"
+        description: "DeAI Web Dashboard has been down for more than 2 minutes"
+    
+    - alert: DeAIDatabaseConnectionLoss
+      expr: postgresql_up{job="postgresql"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        component: database
+      annotations:
+        summary: "DeAI Database connection lost"
+        description: "PostgreSQL database is unreachable"
+        runbook_url: "https://docs.deai.network/runbooks/database-down"
+    
+    - alert: DeAIRedisDown
+      expr: redis_up{job="redis"} == 0
+      for: 1m
+      labels:
+        severity: warning
+        component: redis
+      annotations:
+        summary: "DeAI Redis cache is down"
+        description: "Redis cache has been down for more than 1 minute"
+
+  # Performance Alerts
+  - name: deai.performance
+    interval: 30s
+    rules:
+    - alert: DeAIHighAPILatency
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="deai-api-gateway"}[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+        component: api-gateway
+      annotations:
+        summary: "DeAI API high latency"
+        description: "95th percentile API latency is {{ $value }}s for more than 5 minutes"
+    
+    - alert: DeAILowThroughput
+      expr: rate(deai_tasks_completed_total[5m]) < 50
+      for: 10m
+      labels:
+        severity: warning
+        component: coordination
+      annotations:
+        summary: "DeAI low task throughput"
+        description: "Task completion rate is {{ $value }} tasks/second (below 50/s threshold)"
+    
+    - alert: DeAIHighErrorRate
+      expr: rate(deai_tasks_failed_total[5m]) / rate(deai_tasks_total[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        component: task-processing
+      annotations:
+        summary: "DeAI high task error rate"
+        description: "Task error rate is {{ $value | humanizePercentage }} (above 5% threshold)"
+    
+    - alert: DeAIQueueBacklog
+      expr: deai_pending_tasks_count > 1000
+      for: 15m
+      labels:
+        severity: warning
+        component: task-queue
+      annotations:
+        summary: "DeAI task queue backlog"
+        description: "Task queue has {{ $value }} pending tasks (above 1000 threshold)"
+
+  # Resource Utilization Alerts
+  - name: deai.resources
+    interval: 30s
+    rules:
+    - alert: DeAIHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{pod=~"deai-.*"}[5m]) * 100 > 80
+      for: 10m
+      labels:
+        severity: warning
+        component: infrastructure
+      annotations:
+        summary: "DeAI high CPU usage"
+        description: "Container {{ $labels.pod }} CPU usage is {{ $value }}% (above 80% threshold)"
+    
+    - alert: DeAIHighMemoryUsage
+      expr: (container_memory_usage_bytes{pod=~"deai-.*"} / container_spec_memory_limit_bytes{pod=~"deai-.*"}) * 100 > 90
+      for: 5m
+      labels:
+        severity: critical
+        component: infrastructure
+      annotations:
+        summary: "DeAI high memory usage"
+        description: "Container {{ $labels.pod }} memory usage is {{ $value }}% (above 90% threshold)"
+    
+    - alert: DeAILowDiskSpace
+      expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 85
+      for: 5m
+      labels:
+        severity: warning
+        component: infrastructure
+      annotations:
+        summary: "DeAI low disk space"
+        description: "Node {{ $labels.instance }} disk usage is {{ $value }}% (above 85% threshold)"
+
+  # Node Network Alerts
+  - name: deai.nodes
+    interval: 30s
+    rules:
+    - alert: DeAILowActiveNodes
+      expr: deai_active_nodes_count < 5
+      for: 5m
+      labels:
+        severity: warning
+        component: node-network
+      annotations:
+        summary: "DeAI low active node count"
+        description: "Only {{ $value }} nodes are active (below 5 node threshold)"
+    
+    - alert: DeAINodeOffline
+      expr: increase(deai_node_offline_events_total[5m]) > 0
+      for: 0s
+      labels:
+        severity: warning
+        component: node-network
+      annotations:
+        summary: "DeAI node went offline"
+        description: "Node {{ $labels.node_id }} went offline"
+    
+    - alert: DeAINodeHighFailureRate
+      expr: rate(deai_node_task_failures_total[10m]) / rate(deai_node_tasks_total[10m]) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+        component: node-network
+      annotations:
+        summary: "DeAI node high failure rate"
+        description: "Node {{ $labels.node_id }} has {{ $value | humanizePercentage }} task failure rate"
+
+  # Token Economics Alerts
+  - name: deai.economics
+    interval: 60s
+    rules:
+    - alert: DeAIUnusualTokenMinting
+      expr: increase(deai_tokens_minted_total[1h]) > 10000
+      for: 0s
+      labels:
+        severity: warning
+        component: token-economics
+      annotations:
+        summary: "DeAI unusual token minting activity"
+        description: "{{ $value }} tokens minted in the last hour (above 10,000 threshold)"
+    
+    - alert: DeAILowLiquidity
+      expr: deai_liquidity_pool_balance < 100000
+      for: 30m
+      labels:
+        severity: warning
+        component: defi
+      annotations:
+        summary: "DeAI low liquidity pool balance"
+        description: "Liquidity pool balance is {{ $value }} DEAI (below 100,000 threshold)"
+    
+    - alert: DeAIHighTokenVolatility
+      expr: abs(rate(deai_token_price[1h])) > 0.1
+      for: 15m
+      labels:
+        severity: info
+        component: token-economics
+      annotations:
+        summary: "DeAI high token price volatility"
+        description: "Token price changed by {{ $value | humanizePercentage }} in the last hour"
+
+  # Security Alerts
+  - name: deai.security
+    interval: 30s
+    rules:
+    - alert: DeAIUnauthorizedAccess
+      expr: increase(deai_unauthorized_requests_total[5m]) > 10
+      for: 0s
+      labels:
+        severity: critical
+        component: security
+      annotations:
+        summary: "DeAI unauthorized access attempts"
+        description: "{{ $value }} unauthorized access attempts in the last 5 minutes"
+    
+    - alert: DeAIRateLimitExceeded
+      expr: increase(deai_rate_limit_exceeded_total[5m]) > 100
+      for: 2m
+      labels:
+        severity: warning
+        component: security
+      annotations:
+        summary: "DeAI rate limit frequently exceeded"
+        description: "Rate limit exceeded {{ $value }} times in the last 5 minutes"
+    
+    - alert: DeAISuspiciousActivity
+      expr: increase(deai_suspicious_activity_total[10m]) > 0
+      for: 0s
+      labels:
+        severity: critical
+        component: security
+      annotations:
+        summary: "DeAI suspicious activity detected"
+        description: "Suspicious activity detected: {{ $labels.activity_type }}"
+
+  # Smart Contract Alerts
+  - name: deai.contract
+    interval: 60s
+    rules:
+    - alert: DeAIContractGasHigh
+      expr: deai_contract_gas_usage > 100000000000000
+      for: 5m
+      labels:
+        severity: warning
+        component: smart-contract
+      annotations:
+        summary: "DeAI smart contract high gas usage"
+        description: "Smart contract gas usage is {{ $value }} (above 100T gas threshold)"
+    
+    - alert: DeAIContractError
+      expr: increase(deai_contract_errors_total[5m]) > 0
+      for: 0s
+      labels:
+        severity: critical
+        component: smart-contract
+      annotations:
+        summary: "DeAI smart contract error"
+        description: "Smart contract error: {{ $labels.error_type }}"
+
+  # Application Specific Alerts
+  - name: deai.application
+    interval: 30s
+    rules:
+    - alert: DeAITaskTimeout
+      expr: increase(deai_task_timeouts_total[10m]) > 5
+      for: 5m
+      labels:
+        severity: warning
+        component: task-processing
+      annotations:
+        summary: "DeAI task timeouts increasing"
+        description: "{{ $value }} task timeouts in the last 10 minutes"
+    
+    - alert: DeAIWebSocketConnections
+      expr: deai_websocket_connections > 1000
+      for: 5m
+      labels:
+        severity: info
+        component: websocket
+      annotations:
+        summary: "DeAI high WebSocket connection count"
+        description: "{{ $value }} active WebSocket connections (above 1000)"
+    
+    - alert: DeAIAPIVersionMismatch
+      expr: deai_api_version_mismatches_total > 0
+      for: 1m
+      labels:
+        severity: warning
+        component: api-gateway
+      annotations:
+        summary: "DeAI API version mismatch detected"
+        description: "API version mismatch between client and server"
+
+  # Infrastructure Dependency Alerts
+  - name: deai.dependencies
+    interval: 30s
+    rules:
+    - alert: DeAINEARRPCDown
+      expr: probe_success{job="near-rpc-probe"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: near-rpc
+      annotations:
+        summary: "NEAR RPC endpoint is down"
+        description: "NEAR RPC endpoint is unreachable for more than 2 minutes"
+    
+    - alert: DeAIRefFinanceDown
+      expr: probe_success{job="ref-finance-probe"} == 0
+      for: 5m
+      labels:
+        severity: warning
+        component: ref-finance
+      annotations:
+        summary: "Ref Finance is unreachable"
+        description: "Ref Finance DEX is unreachable for more than 5 minutes"
+
+  # Recovery and Escalation Rules
+  - name: deai.recovery
+    interval: 30s
+    rules:
+    - alert: DeAISystemDegraded
+      expr: |
+        (
+          count(up{job=~"deai-.*"} == 0) > 1
+          or
+          rate(deai_tasks_failed_total[5m]) / rate(deai_tasks_total[5m]) > 0.1
+          or
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="deai-api-gateway"}[5m])) > 5
+        )
+      for: 10m
+      labels:
+        severity: critical
+        component: system
+      annotations:
+        summary: "DeAI system is degraded"
+        description: "Multiple system issues detected - platform performance degraded"
+        runbook_url: "https://docs.deai.network/runbooks/system-degraded"
+    
+    - alert: DeAIEmergencyEscalation
+      expr: |
+        (
+          count(ALERTS{alertname=~"DeAI.*", severity="critical"}) > 3
+          or
+          up{job="deai-api-gateway"} == 0
+        )
+      for: 15m
+      labels:
+        severity: emergency
+        component: system
+      annotations:
+        summary: "DeAI emergency escalation triggered"
+        description: "Multiple critical alerts or complete system failure - emergency response required"
+        runbook_url: "https://docs.deai.network/runbooks/emergency-response"

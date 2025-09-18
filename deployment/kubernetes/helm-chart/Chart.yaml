@@ -1,0 +1,31 @@
+apiVersion: v2
+name: deai-platform
+description: DeAI Decentralized AI Computing Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - ai
+  - blockchain
+  - near
+  - depin
+  - computing
+
+home: https://deai.network
+sources:
+  - https://github.com/deai-platform/deai
+
+maintainers:
+  - name: DeAI Team
+    email: dev@deai.network
+
+dependencies:
+  - name: postgresql
+    version: 12.1.9
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: 17.3.7
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
