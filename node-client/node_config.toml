@@ -1,0 +1,34 @@
+# DeAI Node Configuration File
+# Copy this file and update with your specific values
+
+[node]
+account_id = "your-node.testnet"
+private_key = "YOUR_PRIVATE_KEY_HERE"  # ed25519 private key
+public_ip = "YOUR_PUBLIC_IP"           # Your node's public IP address
+api_port = 8080
+stake_amount = "1.0"                   # Stake amount in NEAR tokens
+
+[near]
+network_id = "testnet"
+contract_account_id = "deai-compute.testnet"
+rpc_url = "https://rpc.testnet.near.org"
+wallet_url = "https://testnet.mynearwallet.com"
+explorer_url = "https://testnet.nearblocks.io"
+
+[ai]
+python_path = "/usr/bin/python3"       # Path to Python interpreter
+models_cache_dir = "./models_cache"    # Directory to cache AI models
+max_model_size_gb = 10                 # Maximum model size to download
+huggingface_token = ""                 # Optional: Hugging Face API token
+supported_frameworks = [
+    "pytorch",
+    "tensorflow", 
+    "transformers"
+]
+
+[hardware]
+gpu_specs = "NVIDIA RTX 4090"         # Your GPU specifications
+cpu_specs = "Intel i9-13900K"         # Your CPU specifications  
+memory_gb = 32                         # Available RAM in GB
+storage_gb = 1000                      # Available storage in GB
+max_concurrent_tasks = 2               # Maximum concurrent AI tasks
