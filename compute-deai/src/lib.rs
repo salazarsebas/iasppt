@@ -1,5 +1,6 @@
-use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
+use near_sdk::borsh::{BorshDeserialize, BorshSerialize, BorshSchema};
 use near_sdk::{near, AccountId, env, Promise, json_types::U128, PanicOnDefault, NearToken};
+use schemars::JsonSchema;
 use near_contract_standards::fungible_token::{FungibleToken, FungibleTokenCore, Balance};
 use std::collections::{HashMap, VecDeque};
 use serde::{Deserialize, Serialize};
@@ -8,11 +9,11 @@ use serde::{Deserialize, Serialize};
 pub const MIN_STAKE_YOCTO: u128 = 1_000_000_000_000_000_000_000_000; // 1 NEAR
 pub const STORAGE_COST: Balance = 1_000_000_000_000_000_000_000; // 0.001 NEAR
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, BorshSchema, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(crate = "near_sdk::serde")]
 pub struct NodeInfo {
-    pub account_id: AccountId,
-    pub stake: NearToken,
+    pub account_id: String,
+    pub stake: u128,
     pub public_ip: String,
     pub gpu_specs: String,
     pub cpu_specs: String,
@@ -23,22 +24,22 @@ pub struct NodeInfo {
     pub reputation_score: u32,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, BorshSchema, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Task {
     pub id: u64,
     pub description: String,  // JSON: {model: "url", input: "data", task_type: "inference"}
-    pub assignee: Option<AccountId>,
+    pub assignee: Option<String>,
     pub status: TaskStatus,
     pub output: Option<String>,
     pub proof_hash: Option<String>,
     pub created_at: u64,
     pub completed_at: Option<u64>,
     pub reward_amount: Balance,
-    pub requester: AccountId,
+    pub requester: String,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, BorshSchema, Serialize, Deserialize, Clone, PartialEq, Debug, JsonSchema)]
 #[serde(crate = "near_sdk::serde")]
 pub enum TaskStatus {
     Pending,
@@ -56,7 +57,7 @@ pub struct DeAICompute {
     pub completed_tasks: HashMap<u64, Task>,
     pub task_counter: u64,
     pub token: FungibleToken,
-    pub min_stake: NearToken,
+    pub min_stake: u128,
     pub total_rewards_distributed: Balance,
     pub owner_id: AccountId,
 }
@@ -74,7 +75,7 @@ impl DeAICompute {
             completed_tasks: HashMap::new(),
             task_counter: 0,
             token,
-            min_stake: NearToken::from_yoctonear(MIN_STAKE_YOCTO),
+            min_stake: MIN_STAKE_YOCTO,
             total_rewards_distributed: 0,
             owner_id,
         }
@@ -92,7 +93,7 @@ impl DeAICompute {
         let account_id = env::predecessor_account_id();
         let stake = env::attached_deposit();
         
-        assert!(stake >= self.min_stake, "Insufficient stake. Minimum: {} yoctoNEAR", self.min_stake.as_yoctonear());
+        assert!(stake.as_yoctonear() >= self.min_stake, "Insufficient stake. Minimum: {} yoctoNEAR", self.min_stake);
         assert!(!self.nodes.contains_key(&account_id), "Node already registered");
         assert!(!public_ip.is_empty(), "Public IP cannot be empty");
         assert!(!api_endpoint.is_empty(), "API endpoint cannot be empty");
@@ -103,8 +104,8 @@ impl DeAICompute {
         }
 
         let node_info = NodeInfo {
-            account_id: account_id.clone(),
-            stake,
+            account_id: account_id.to_string(),
+            stake: stake.as_yoctonear(),
             public_ip,
             gpu_specs,
             cpu_specs,
@@ -138,7 +139,7 @@ impl DeAICompute {
         let mut node = self.nodes.get(&account_id).expect("Node not registered").clone();
         
         // Return staked amount
-        Promise::new(account_id.clone()).transfer(node.stake);
+        Promise::new(account_id.clone()).transfer(NearToken::from_yoctonear(node.stake));
         
         node.is_active = false;
         self.nodes.insert(account_id, node);
@@ -169,7 +170,7 @@ impl DeAICompute {
             created_at: env::block_timestamp(),
             completed_at: None,
             reward_amount: compute_cost,
-            requester,
+            requester: requester.to_string(),
         };
 
         self.tasks.push_back(task);
@@ -188,7 +189,7 @@ impl DeAICompute {
         
         let mut task = self.tasks.remove(task_index).unwrap();
         
-        assert_eq!(task.assignee.as_ref(), Some(&account_id), "Not assigned to this node");
+        assert_eq!(task.assignee.as_ref(), Some(&account_id.to_string()), "Not assigned to this node");
         assert_eq!(task.status, TaskStatus::Assigned, "Task not in assigned state");
         assert!(!proof_hash.is_empty(), "Proof hash cannot be empty");
         assert!(!output.is_empty(), "Output cannot be empty");
@@ -220,7 +221,7 @@ impl DeAICompute {
         if let Some(available_node) = self.get_available_node() {
             if let Some(task) = self.tasks.front_mut() {
                 if task.status == TaskStatus::Pending {
-                    task.assignee = Some(available_node);
+                    task.assignee = Some(available_node.to_string());
                     task.status = TaskStatus::Assigned;
                 }
             }
@@ -243,7 +244,7 @@ impl DeAICompute {
 
     fn node_has_active_task(&self, node_id: &AccountId) -> bool {
         self.tasks.iter().any(|task| 
-            task.assignee.as_ref() == Some(node_id) && 
+            task.assignee.as_ref() == Some(&node_id.to_string()) && 
             matches!(task.status, TaskStatus::Assigned | TaskStatus::InProgress)
         )
     }
@@ -255,7 +256,7 @@ impl DeAICompute {
 
     pub fn get_assigned_tasks(&self, node_id: AccountId) -> Vec<Task> {
         self.tasks.iter()
-            .filter(|task| task.assignee.as_ref() == Some(&node_id))
+            .filter(|task| task.assignee.as_ref() == Some(&node_id.to_string()))
             .cloned()
             .collect()
     }
@@ -305,6 +306,6 @@ impl DeAICompute {
     // Admin Functions
     pub fn update_min_stake(&mut self, new_min_stake: U128) {
         assert_eq!(env::predecessor_account_id(), self.owner_id, "Only owner can update min stake");
-        self.min_stake = NearToken::from_yoctonear(new_min_stake.into());
+        self.min_stake = new_min_stake.into();
     }
 }

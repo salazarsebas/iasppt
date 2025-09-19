@@ -185,7 +185,7 @@ mod tests {
         
         // Check node received reward tokens
         let balance = contract.ft_balance_of(accounts(2));
-        assert_eq!(balance.0, task_cost.to_string());
+        assert_eq!(balance.0, task_cost);
         
         // Check node stats updated
         let node_info = contract.get_node_info(accounts(2)).unwrap();
@@ -281,7 +281,7 @@ mod tests {
         let mut contract = DeAICompute::new(accounts(1));
         
         // Initial supply should be 0
-        assert_eq!(contract.ft_total_supply().0, "0");
+        assert_eq!(contract.ft_total_supply().0, 0);
         
         // Register a node and complete a task to mint tokens
         let mut context = get_context(accounts(2), MIN_STAKE);
@@ -307,8 +307,8 @@ mod tests {
         contract.submit_result(0, "proof_hash".to_string(), "result".to_string());
         
         // Check tokens were minted
-        assert_eq!(contract.ft_balance_of(accounts(2)).0, task_cost.to_string());
-        assert_eq!(contract.ft_total_supply().0, task_cost.to_string());
-        assert_eq!(contract.get_total_rewards_distributed().0, task_cost.to_string());
+        assert_eq!(contract.ft_balance_of(accounts(2)).0, task_cost);
+        assert_eq!(contract.ft_total_supply().0, task_cost);
+        assert_eq!(contract.get_total_rewards_distributed().0, task_cost);
     }
 }
